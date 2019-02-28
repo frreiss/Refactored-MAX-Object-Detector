@@ -1,4 +1,6 @@
 # Project-specific exclusions
+env
+graph_def_editor
 
 # Vim temp files
 *.swp
