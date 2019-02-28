@@ -1,3 +1,12 @@
+# Project-specific exclusions
+
+# Vim temp files
+*.swp
+
+# IntelliJ metadata
+.idea
+*.iml
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
