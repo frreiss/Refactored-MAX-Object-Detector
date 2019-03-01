@@ -50,7 +50,12 @@ conda create -y --prefix ./env \
     nomkl
 
 # Install the latest master branch of GDE
-git clone https://github.com/CODAIT/graph_def_editor.git
+#git clone https://github.com/CODAIT/graph_def_editor.git
+# Temporary: Use my branch until my latest PR is merged 
+git clone https://github.com/frreiss/graph_def_editor.git
+cd graph_def_editor
+git checkout issue-savedmodel
+cd ..
 conda activate ./env
 pip install ./graph_def_editor/
 conda deactivate
