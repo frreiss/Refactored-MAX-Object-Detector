@@ -37,7 +37,8 @@ def main():
 
   Output goes to "wml_function.py"
   """
-  util.generate_wml_function("handlers.py")
+  func_body = util.generate_wml_function(handlers.ObjectDetectorHandlers)
+  print(func_body)
 
 
 if __name__ == "__main__":

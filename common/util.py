@@ -21,7 +21,10 @@ from typing import Dict
 
 import inspect
 import os
+import textwrap
 import urllib.request
+
+# Local imports
 import common.prepost as prepost
 import common.inference_request as inference_request
 
@@ -48,36 +51,80 @@ def fetch_or_use_cached(temp_dir, file_name, url):
   return cached_filename
 
 
-_BEGIN_MARKER = "# BEGIN MARKER FOR CODE GENERATOR -- DO NOT REMOVE"
-_END_MARKER =  "# BEGIN MARKER FOR CODE GENERATOR -- DO NOT REMOVE"
-def _retrieve_code_snippet(file_name):
-  # type: (str) -> str
+_BEGIN_MARKER = "# BEGIN MARKER FOR CODE GENERATOR"
+_END_MARKER = "# END MARKER FOR CODE GENERATOR"
+_INDENT_TO_ADD = "  "
+def _retrieve_code_snippet(module_ref):
+  # type: (Any) -> str
   """
   Subroutine of generate_wml_function() retrieving marked code snippets from
   Python source files.
+
+  Args:
+    module_ref: Reference to module containing the code snippet to grab
   """
-  
+  file_name = inspect.getfile(module_ref)
+  with open(file_name) as f:
+    lines = f.readlines()
+    begin, end = -1, -1
+    for i in range(len(lines)):
+      if _BEGIN_MARKER in lines[i] and begin == -1:
+        begin = i + 1
+      elif _END_MARKER in lines[i]:
+        end = i
+  if begin == -1:
+    raise ValueError("Didn't find begin marker in source file {} for module "
+                     "{}".format(file_name, module_ref))
+  if end == -1:
+    raise ValueError("Didn't find end marker in source file {} for module "
+                     "{}".format(file_name, module_ref))
+  snippet = "".join(lines[begin:end])
+  # Fix indent to match generated outer function
+  return textwrap.indent(snippet, _INDENT_TO_ADD)
 
 
-def generate_wml_function(handlers_file):
-  # type: (str) -> str
+def generate_wml_function(handlers_ref):
+  # type: (Any) -> str
   """
-  Generate and return a deployable WML function that wraps a set of handlers
+  Generate and return a deployable WML function that wraps a set of handlers.
+
+  Args:
+    handlers_ref: Reference to an class type (NOT an instance) of the handlers
+    class -- for example, handlers.ObjectDetectorHandlers. This class must be a
+    subclass of
+    `PrePost`
   """
-  # WML deployable functions need to be Python closures, and Python is very
+  # WML deployable functions need to be Python closures, and Python is
   # conservative about what gets captured in a closure. Auxiliary classes
   # either need to be importable on the remote machine or defined in the
   # function that creates the closure. For the time being, we cat everything we
   # need into the function. Eventually this approach should be replaced with
   # a pip install/import of the relevant framework classes.
-  FUNCTION_TEMPLATE = """
-  def deployable_funtion():
-    {prepost_class_def}
-    {inference_request_class_def}
-    pass
-  """
+  _FUNCTION_TEMPLATE = """
+def deployable_funtion():
+{prepost_class_def}
+{inference_request_class_def}
+{handlers_class_def}
+  
+  def score(function_payload):
+    # TODO: Turn function_payload into a request
+    h = {handlers_class_name}()
+    h.pre_process(request)
+    # TODO: Invoke WML deployed model
+    h.post_process(request)
+    return request.processed_outputs
+    
+  return score
+"""
 
   # Use reflection to find the class source files so that we don't have to
   # hard-code their relative locations here
-  prepost_class_file = inspect.getfile(prepost)
-  print("prepost class is in {}".format(prepost_class_file))
+  params_dict = {
+    "prepost_class_def" : _retrieve_code_snippet(prepost),
+    "inference_request_class_def" : _retrieve_code_snippet(inference_request),
+    "handlers_class_def" : _retrieve_code_snippet(handlers_ref),
+    "handlers_class_name" : handlers_ref.__name__
+  }
+
+  generated_code = _FUNCTION_TEMPLATE.format(**params_dict)
+  return generated_code

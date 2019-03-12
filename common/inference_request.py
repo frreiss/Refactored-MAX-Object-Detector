@@ -23,7 +23,7 @@ import json
 import tensorflow as tf
 
 
-# BEGIN MARKER FOR CODE GENERATOR
+# BEGIN MARKER FOR CODE GENERATOR -- DO NOT DELETE
 class InferenceRequest(object):
   """
   Class for representing in-flight inference reqeusts as they go through
@@ -86,7 +86,7 @@ class InferenceRequest(object):
     Generate a human-readable JSON string version of the result of this request.
     """
     return json.dumps(self.processed_outputs, indent=4)
-# END MARKER FOR CODE GENERATOR
+# END MARKER FOR CODE GENERATOR -- DO NOT DELETE
 
 
 # We keep this function separate from the class so that the class doesn't

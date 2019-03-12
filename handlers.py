@@ -23,7 +23,7 @@ from common.prepost import PrePost
 from common.inference_request import InferenceRequest
 
 
-# *** BEGIN HANDLERS ***
+# BEGIN MARKER FOR CODE GENERATOR -- DO NOT DELETE
 class ObjectDetectorHandlers(PrePost):
 
   def pre_process(self, request):
@@ -115,4 +115,4 @@ class ObjectDetectorHandlers(PrePost):
     # otherwise.
     request.processed_outputs["status"] = error_message
 
-# *** END HANDLERS ***
+# END MARKER FOR CODE GENERATOR -- DO NOT DELETE
