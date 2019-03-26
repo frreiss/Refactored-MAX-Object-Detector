@@ -61,6 +61,7 @@ pip install ./graph_def_editor/
 
 # Install additional dependencies required for WML
 pip install ibm-cos-sdk
+pip install watson-machine-learning-client
 # conda install -c conda-forge awscli
 
 conda deactivate
