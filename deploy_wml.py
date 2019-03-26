@@ -65,6 +65,8 @@ _SAVED_MODEL_DIR = "./saved_model"
 _SAVED_MODEL_TARBALL = _SAVED_MODEL_DIR + ".tar.gz"
 _SAVED_MODEL_TARBALL_PATH_IN_COS = "saved_model.tar.gz"
 
+_PREPOST_FUNC_FILE = "pre_post.py"
+
 # Preshrunk configuration object handle for ibm_boto3 block transfers
 _ONE_MEGABYTE = 1024 * 1024
 _COS_TRANSFER_BLOCK_SIZE = 16 * _ONE_MEGABYTE
@@ -83,8 +85,6 @@ _WML_META_FRAMEWORK_NAME = "tensorflow"
 _WML_META_FRAMEWORK_VERSION = "1.6"
 _WML_META_RUNTIME_NAME = "python"
 _WML_META_RUNTIME_VERSION = "3.6"
-#_WML_META_RUNTIME_NAME = "python"
-#_WML_META_RUNTIME_VERSION = "3.6"
 #_WML_META_FRAMEWORK_LIBRARIES = [{'name':'keras', 'version': '2.1.3'}]
 
 
@@ -190,10 +190,10 @@ def main():
   print("creds_json is:\n{}".format(creds_json))
 
   _WML_CREDENTIALS = creds_json["WML_credentials"]
-  _WML_USER_NAME = creds_json["WML_credentials"]["username"]
-  _WML_PASSWORD = creds_json["WML_credentials"]["password"]
-  _WML_INSTANCE = creds_json["WML_credentials"]["instance_id"]
-  _WML_URL = creds_json["WML_credentials"]["url"]
+  # _WML_USER_NAME = creds_json["WML_credentials"]["username"]
+  # _WML_PASSWORD = creds_json["WML_credentials"]["password"]
+  # _WML_INSTANCE = creds_json["WML_credentials"]["instance_id"]
+  # _WML_URL = creds_json["WML_credentials"]["url"]
 
   # STEP 2: Convert the SavedModel directory to a tarball. WML expects a
   # tarball.
@@ -238,8 +238,33 @@ def main():
     name=model_details['entity']['name'])
   print("Deployment details: {}".format(deployment_details))
 
-  # func_body = util.generate_wml_function(handlers.ObjectDetectorHandlers)
-  # print(func_body)
+  deployment_url = client.deployments.get_scoring_url(deployment_details)
+  print("Deployment URL: {}".format(deployment_url))
+
+  # STEP 7: Generate a deployable function to cover pre- and post-processing
+  # operations.
+  func_body = util.generate_wml_function(handlers.ObjectDetectorHandlers,
+                                         _WML_CREDENTIALS, deployment_url)
+  with open("deployable_function.py", "w") as f:
+    f.write(func_body)
+
+  # STEP 8: Deploy the deployable function to WML
+  import deployable_function
+  meta_data = {client.repository.FunctionMetaNames.NAME:
+               'MAX Object Detector Pre/Post-Processing'}
+  function_details = client.repository.store_function(
+    meta_props=meta_data, function=deployable_function.deployable_function)
+  print("Function details: {}".format(function_details))
+
+  function_deployment_details = client.deployments.create(
+    artifact_uid=function_details["metadata"]["guid"],
+    name='MAX Object Detector Pre/Post-Processing Deployment')
+  print("Function deployment details: {}".format(function_deployment_details))
+
+  function_deployment_endpoint_url = client.deployments.get_scoring_url(
+    function_deployment_details)
+  print("Function deployment URL: {}".format(function_deployment_endpoint_url))
+
   print("Done.")
 
 

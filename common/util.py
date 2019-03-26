@@ -83,16 +83,19 @@ def _retrieve_code_snippet(module_ref):
   return textwrap.indent(snippet, _INDENT_TO_ADD)
 
 
-def generate_wml_function(handlers_ref):
-  # type: (Any) -> str
+def generate_wml_function(handlers_ref, credentials_json, deployment_url):
+  # type: (Any, Dict[str, Any], str) -> str
   """
   Generate and return a deployable WML function that wraps a set of handlers.
 
   Args:
     handlers_ref: Reference to an class type (NOT an instance) of the handlers
-    class -- for example, handlers.ObjectDetectorHandlers. This class must be a
-    subclass of
-    `PrePost`
+      class -- for example, handlers.ObjectDetectorHandlers. This class must be
+      a subclass of `PrePost`
+    credentials_json: JSON record containing configuration gobbledygook as
+      displayed by the WML web UI when the user creates a set of credentials
+      for connecting to the backend model
+    deployment_url: URL at which the backend model is deployed
   """
   # WML deployable functions need to be Python closures, and Python is
   # conservative about what gets captured in a closure. Auxiliary classes
@@ -101,16 +104,29 @@ def generate_wml_function(handlers_ref):
   # need into the function. Eventually this approach should be replaced with
   # a pip install/import of the relevant framework classes.
   _FUNCTION_TEMPLATE = """
-def deployable_funtion():
+wml_credentials = {credentials_json}
+
+model_deployment_endpoint_url = "{deployment_url}"
+
+ai_parms = {{ "wml_credentials" : wml_credentials,
+             "model_deployment_endpoint_url" : model_deployment_endpoint_url 
+           }}  
+  
+def deployable_function(parms=ai_parms):
 {prepost_class_def}
 {inference_request_class_def}
 {handlers_class_def}
+
+  from watson_machine_learning_client import WatsonMachineLearningAPIClient
+  client = WatsonMachineLearningAPIClient(parms["wml_credentials"])
   
   def score(function_payload):
-    # TODO: Turn function_payload into a request
+    request = InferenceRequest()
+    request.raw_inputs = function_payload
     h = {handlers_class_name}()
     h.pre_process(request)
-    # TODO: Invoke WML deployed model
+    request.raw_outputs = client.deployments.score(
+      parms["model_deployment_endpoint_url"], request.processed_inputs)
     h.post_process(request)
     return request.processed_outputs
     
@@ -120,10 +136,12 @@ def deployable_funtion():
   # Use reflection to find the class source files so that we don't have to
   # hard-code their relative locations here
   params_dict = {
-    "prepost_class_def" : _retrieve_code_snippet(prepost),
-    "inference_request_class_def" : _retrieve_code_snippet(inference_request),
-    "handlers_class_def" : _retrieve_code_snippet(handlers_ref),
-    "handlers_class_name" : handlers_ref.__name__
+    "prepost_class_def": _retrieve_code_snippet(prepost),
+    "inference_request_class_def": _retrieve_code_snippet(inference_request),
+    "handlers_class_def": _retrieve_code_snippet(handlers_ref),
+    "handlers_class_name": handlers_ref.__name__,
+    "credentials_json": credentials_json,
+    "deployment_url": deployment_url
   }
 
   generated_code = _FUNCTION_TEMPLATE.format(**params_dict)

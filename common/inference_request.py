@@ -48,6 +48,14 @@ class InferenceRequest(object):
     """
     return self._raw_inputs
 
+  @raw_inputs.setter
+  def raw_inputs(self, value):
+    """
+    Replace the current value of the raw_inputs property with a *shallow copy*
+    of the provided dict.
+    """
+    self._raw_inputs = value.copy()
+
   @property
   def processed_inputs(self):
     # type: () -> Dict[str, Any]
@@ -69,6 +77,14 @@ class InferenceRequest(object):
     Values are Python objects as returned by TensorFlow.
     """
     return self._raw_outputs
+
+  @raw_outputs.setter
+  def raw_outputs(self, value):
+    """
+    Replace the current value of the raw_outputs property with a *shallow copy*
+    of the provided dict.
+    """
+    self._raw_outputs = value.copy()
 
   @property
   def processed_outputs(self):
