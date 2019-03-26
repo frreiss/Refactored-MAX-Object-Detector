@@ -57,9 +57,9 @@ import sys
 # object storage instances.
 _COS_AUTH_ENDPOINT = "https://iam.cloud.ibm.com/oidc/token"
 
-# Name of the object storage bucket we use to hold the "input" to the
-# dummy "training script"
-_INPUT_BUCKET = "max-input-bucket"
+# Name of the object storage bucket we use to hold the model's artifacts.
+# Currently we assume one bucket per model.
+_MODEL_BUCKET = "MAX-Object-Detector-Bucket"
 
 _SAVED_MODEL_DIR = "./saved_model"
 _SAVED_MODEL_TARBALL = _SAVED_MODEL_DIR + ".tar.gz"
@@ -170,17 +170,27 @@ def _cp_to_cos(cos, local_file, bucket_name, item_name, replace=False):
 # BEGIN SCRIPT
 def main():
   """
-  Script to deploy this model to Watson Machine Learning.
+  Script to deploy the larger parts of this model to Cloud Object Storage.
 
-  Before running this script, you must perform the following manual steps:
+  Before running this script, you'll need to perform the following manual steps:
   * Create a file `ibm_cloud_credentials.json` in this directory, if such a
     file doesn't already exist.
     Initialize the file with an empty JSON record, i.e. "{ }".
-  * Create a Watson Machine Learning (WML) instance.
-  * Navigate to your WML instance's web UI and click on the "Service
-    credentials" link, then click on "New credential" to create a new set of
-    service credentials. Copy the credentials into `ibm_cloud_credentials.json`
-    under the key "WML_credentials".
+  * Create a Cloud Object Storage instance.
+  * Go to the COS web UI and create a set of credentials with write
+    permissions on your COS instance. Paste the JSON version of the credentials
+    into `ibm_cloud_credentials.json` under the key "COS_credentials".
+  * Figure out an endpoint that your COS instance can talk to.
+    Go back to the web UI for COS and click on "Endpoints". Take one of the
+    endpoint names, prepend it with "https://", and store the resulting URL
+    under the key "COS_endpoint" in `ibm_cloud_credentials.json`
+  * Figure out what "location constraint" works for your COS bucket. Today
+    there is a list of potential values at
+  https://console.bluemix.net/docs/infrastructure/cloud-object-storage
+  -infrastructure/buckets.html#create-a-bucket
+    (though this part of the docs has a habit of moving around).
+    Enter your location constraint string into `ibm_cloud_credentials.json`
+    under the key "COS_location_constraint".
   """
   # STEP 1: Read IBM Cloud authentication data from the user's local JSON
   # file.
@@ -189,14 +199,29 @@ def main():
 
   print("creds_json is:\n{}".format(creds_json))
 
+  _COS_ENDPOINT = creds_json["COS_endpoint"]
+  _COS_API_KEY_ID = creds_json["COS_credentials"]["apikey"]
+  _COS_RESOURCE_CRN = creds_json["COS_credentials"]["resource_instance_id"]
+  _COS_LOCATION_CONSTRAINT = creds_json["COS_location_constraint"]
+
   _WML_CREDENTIALS = creds_json["WML_credentials"]
   _WML_USER_NAME = creds_json["WML_credentials"]["username"]
   _WML_PASSWORD = creds_json["WML_credentials"]["password"]
   _WML_INSTANCE = creds_json["WML_credentials"]["instance_id"]
   _WML_URL = creds_json["WML_credentials"]["url"]
 
-  # STEP 2: Convert the SavedModel directory to a tarball. WML expects a
-  # tarball.
+  # STEP 2: Create a bucket on Cloud Object Storage to hold the SavedModel
+  cos = ibm_boto3.resource("s3",
+                           ibm_api_key_id=_COS_API_KEY_ID,
+                           ibm_service_instance_id=_COS_RESOURCE_CRN,
+                           ibm_auth_endpoint=_COS_AUTH_ENDPOINT,
+                           config=Config(signature_version="oauth"),
+                           endpoint_url=_COS_ENDPOINT
+                           )
+
+  _empty_cos_bucket(cos, _MODEL_BUCKET, _COS_LOCATION_CONSTRAINT)
+
+  # STEP 3: Convert the SavedModel directory to a tarball.
   if os.path.exists(_SAVED_MODEL_TARBALL):
     os.remove(_SAVED_MODEL_TARBALL)
   subprocess.run(["tar", "--create", "--gzip", "--verbose",
@@ -204,42 +229,10 @@ def main():
                   "--file={}".format(_SAVED_MODEL_TARBALL),
                   "saved_model.pb"])
 
-  # STEP 3: Open a connection to the WML Python API.
-  client = WatsonMachineLearningAPIClient(_WML_CREDENTIALS)
+  # STEP 4: Upload the SavedModel tarball to the COS bucket.
+  _cp_to_cos(cos, _SAVED_MODEL_TARBALL, _MODEL_BUCKET,
+             _SAVED_MODEL_TARBALL_PATH_IN_COS, replace=True)
 
-  # STEP 4: Set up the metadata fields that WML requires in every model and
-  # can't read out of the SavedModel files.
-  # The keys that you need in your JSON structure are accessible only via an
-  # object that you can only create after creating a connection.
-  model_metadata = {
-    client.repository.ModelMetaNames.AUTHOR_NAME: _WML_META_AUTHOR_NAME,
-    client.repository.ModelMetaNames.NAME: _WML_META_NAME,
-    client.repository.ModelMetaNames.DESCRIPTION: _WML_META_DESCRIPTION,
-    client.repository.ModelMetaNames.FRAMEWORK_NAME: _WML_META_FRAMEWORK_NAME,
-    client.repository.ModelMetaNames.FRAMEWORK_VERSION:
-      _WML_META_FRAMEWORK_VERSION,
-    client.repository.ModelMetaNames.RUNTIME_NAME: _WML_META_RUNTIME_NAME,
-    client.repository.ModelMetaNames.RUNTIME_VERSION: _WML_META_RUNTIME_VERSION,
-    # client.repository.ModelMetaNames.FRAMEWORK_LIBRARIES:
-    #   _WML_META_FRAMEWORK_LIBRARIES
-  }
-  print("Model metadata: {}".format(model_metadata))
-
-  # STEP 5: Use a little-known API to upload the SavedModel tarball and
-  # associate our model metadata with it.
-  model_details = client.repository.store_model(
-    model=_SAVED_MODEL_TARBALL,
-    meta_props=model_metadata)
-  print("Model details: {}".format(model_details))
-
-  # STEP 6: Deploy the model the you just uploaded to the model repository
-  deployment_details = client.deployments.create(
-    model_details['metadata']['guid'],
-    name=model_details['entity']['name'])
-  print("Deployment details: {}".format(deployment_details))
-
-  # func_body = util.generate_wml_function(handlers.ObjectDetectorHandlers)
-  # print(func_body)
   print("Done.")
 
 
