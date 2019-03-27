@@ -104,6 +104,7 @@ def generate_wml_function(handlers_ref, credentials_json, deployment_url):
   # need into the function. Eventually this approach should be replaced with
   # a pip install/import of the relevant framework classes.
   _FUNCTION_TEMPLATE = """
+
 wml_credentials = {credentials_json}
 
 model_deployment_endpoint_url = "{deployment_url}"
@@ -113,6 +114,7 @@ ai_parms = {{ "wml_credentials" : wml_credentials,
            }}  
   
 def deployable_function(parms=ai_parms):
+  import json
 {prepost_class_def}
 {inference_request_class_def}
 {handlers_class_def}
@@ -120,13 +122,18 @@ def deployable_function(parms=ai_parms):
   from watson_machine_learning_client import WatsonMachineLearningAPIClient
   client = WatsonMachineLearningAPIClient(parms["wml_credentials"])
   
+  # Generated scoring function. By WML convention, this function must take as
+  # its argument a Python dictionary. Inside this dictionary, there must be a 
+  # key called "values". The actual parameters of the request must be stored 
+  # in dictionary under the "values" key.
   def score(function_payload):
     request = InferenceRequest()
-    request.raw_inputs = function_payload
+    request.set_raw_inputs_from_watson_v3(function_payload)
     h = {handlers_class_name}()
     h.pre_process(request)
     request.raw_outputs = client.deployments.score(
-      parms["model_deployment_endpoint_url"], request.processed_inputs)
+      parms["model_deployment_endpoint_url"], 
+      request.processed_inputs_as_watson_v3())
     h.post_process(request)
     return request.processed_outputs
     

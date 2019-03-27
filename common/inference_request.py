@@ -56,6 +56,65 @@ class InferenceRequest(object):
     """
     self._raw_inputs = value.copy()
 
+  def set_raw_inputs_from_watson_v3(self, request_json):
+    # type: (Dict[str, Any]) -> None
+    """
+    Set the `raw_inputs` property of this request using a JSON request in
+    Watson V3 API format, as defined at https://watson-ml-api.mybluemix.net.
+    There does not appear to be any formal specification of the input format,
+    only the following example:
+    ```json
+    {
+      "fields": [
+        "name",
+        "age",
+        "position"
+      ],
+      "values": [
+        [
+          "john",
+          33,
+          "engineer"
+        ],
+        [
+          "mike",
+          23,
+          "student"
+        ]
+      ]
+    }
+    ```
+    This method rigorously enforces the implicit requirements of this example:
+    * All fields must be defined in the "fields" tag
+    * The "values" tag must contain a list of tuples
+    * Each tuple under "values" must have the same number of fields as are
+      defined under "fields".
+    It's unclear what types are allowed for a field value, so for now we
+    allow abitrary JSON for a field value. We also don't attempt to enforce
+    that every tuple has the same type in a given field.
+
+    Currently we only support a single input tuple.
+
+    Args:
+      request_json: Parsed JSON request in Watson V3 format.
+    """
+    fields_list = request_json["fields"]
+    tuples_list = request_json["values"]
+    # TODO: Handle requests with multiple tuples
+    if len(tuples_list) > 1:
+      raise ValueError("Received {} tuples of values, but current "
+                       "implementation can only handle "
+                       "1".format(len(tuples_list)))
+    first_tuple = tuples_list[0]
+    if len(first_tuple) != len(fields_list):
+      raise ValueError("Received {} field names and {} field values"
+                       "".format(len(fields_list), len(first_tuple)))
+    self.raw_inputs.clear()
+    for i in range(len(fields_list)):
+      field_name = fields_list[i]
+      field_value = first_tuple[i]
+      self.raw_inputs[field_name] = field_value
+
   @property
   def processed_inputs(self):
     # type: () -> Dict[str, Any]
@@ -66,6 +125,49 @@ class InferenceRequest(object):
     when invoking a TensorFlow graph.
     """
     return self._processed_inputs
+
+  def processed_inputs_as_watson_v3(self):
+    # type: () -> Dict[str, Any]
+    """
+    Convert the `processed_inputs` property of this request to an input
+    record in Watson V3 API format, as defined at
+    https://watson-ml-api.mybluemix.net.
+    There does not appear to be any formal specification of the input format,
+    only the following example:
+    ```json
+    {
+      "fields": [
+        "name",
+        "age",
+        "position"
+      ],
+      "values": [
+        [
+          "john",
+          33,
+          "engineer"
+        ],
+        [
+          "mike",
+          23,
+          "student"
+        ]
+      ]
+    }
+    ```
+    This method rigorously enforces the implicit requirements of this example:
+    * All fields must be defined in the "fields" tag
+    * The "values" tag must contain a list of tuples
+    * Each tuple under "values" must have the same number of fields as are
+      defined under "fields".
+    Currently we only support a single input tuple.
+    """
+    field_names = list(self.processed_outputs.keys())
+    first_tuple = [self.processed_outputs[k] for k in field_names]
+    return {
+      "fields": field_names,
+      "values": [first_tuple]
+    }
 
   @property
   def raw_outputs(self):
@@ -102,6 +204,7 @@ class InferenceRequest(object):
     Generate a human-readable JSON string version of the result of this request.
     """
     return json.dumps(self.processed_outputs, indent=4)
+
 # END MARKER FOR CODE GENERATOR -- DO NOT DELETE
 
 

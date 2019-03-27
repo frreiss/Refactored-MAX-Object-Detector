@@ -25,8 +25,13 @@ import common.inference_request as inference_request
 import handlers
 
 # System imports
+import base64
+import json
 import os
-import tensorflow as tf
+
+# IBM imports
+from watson_machine_learning_client import WatsonMachineLearningAPIClient
+
 
 # Panda pic from Wikimedia; also used in
 # https://github.com/tensorflow/models/blob/master/research/slim/nets ...
@@ -41,8 +46,16 @@ _SAVED_MODEL_DIR = "./saved_model"
 
 def main():
   """
-  Spin up a local copy of the model, generate a JSON request, pass that
-  through the model, and print the result.
+  Connect to a copy of the model deployed via the deploy_wml.py script,
+  generate a web service request, pass that request through the model,
+  and print the result.
+
+  Before running this script, you need to perform the following manual steps:
+  * Perform the manual steps outlined in the deploy_wml.py script.
+  * Run the deploy_wml.py script
+  * Enter the deployment URL that the deploy_wml.py script prints out into
+    the local file `ibm_cloud_credentials.json` under the key
+    "WML_function_url".
   """
   if not os.path.isdir(_TMP_DIR):
     os.mkdir(_TMP_DIR)
@@ -54,29 +67,22 @@ def main():
     image_data = f.read()
   thresh = 0.7
 
-  request = inference_request.InferenceRequest()
-  request.raw_inputs["image"] = image_data
-  request.raw_inputs["threshold"] = 0.7
+  # Note that "values" tag at the top level. This tag is a requirement of the
+  # WML API standard.
+  request_json = {"values": {
+    "image": base64.standard_b64encode(image_data).decode("utf-8"),
+    "threshold": thresh
+  }}
 
-  # Fire up TensorFlow and perform end-to-end inference
-  with tf.Session() as sess:
-    graph = tf.Graph()
-    with graph.as_default():
-      meta_graph = tf.saved_model.load(
-        sess,
-        [tf.saved_model.tag_constants.SERVING],
-        _SAVED_MODEL_DIR)  # type: tf.MetaGraphDef
+  # Connect to Watson Machine Learning Python API
+  with open("./ibm_cloud_credentials.json") as f:
+    creds_json = json.load(f)
+  _WML_CREDENTIALS = creds_json["WML_credentials"]
+  _WML_FUNCTION_URL = creds_json["WML_function_url"]
+  client = WatsonMachineLearningAPIClient(_WML_CREDENTIALS)
 
-      # Extract serving "method" signature
-      signature = meta_graph.signature_def["serving_default"]
-
-      print("Signature:\n{}".format(signature))
-
-      odh = handlers.ObjectDetectorHandlers()
-      odh.pre_process(request)
-      inference_request.pass_to_local_tf(request, sess, graph, signature)
-      odh.post_process(request)
-      print("Result:\n{}".format(request.json_result()))
+  response = client.deployments.score(_WML_FUNCTION_URL, request_json)
+  print("Response: {}".format(response))
 
 
 if __name__ == "__main__":
