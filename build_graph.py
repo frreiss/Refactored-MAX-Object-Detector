@@ -153,29 +153,25 @@ def _build_preprocessing_graph_def():
     Input node of the graph is the placeholder "raw_image", and the output is
     the node with the name "preprocessed_image".
   """
-  # At the moment, the only preprocessing we need to perform is converting
-  # JPEG/PNG/GIF files to numpy arrays.
+  # Preprocessing steps performed:
+  # 1. Decode base64
+  # 2. Uncompress JPEG/PNG/GIF image file
+  # 3. Massage into a single-image batch
+  # 2 and 3 are handled by the same op
   img_decode_g = tf.Graph()
   with img_decode_g.as_default():
     raw_image = tf.placeholder(tf.string, name="raw_image")
 
-    # Downstream code hardcodes RGB
-    _NUM_CHANNELS = 3
+    binary_image = tf.io.decode_base64(raw_image)
 
-    # The TensorFlow authors, in their infinite wisdom, created two generic
-    # image-decoder ops. tf.image.decode_image() returns a 4D tensor when it
-    # receives a GIF and a 3D tensor for every other file type. This means
-    # that you need complicated shape-checking and reshaping logic downstream
+    # tf.image.decode_image() returns a 4D tensor when it receives a GIF and
+    # a 3D tensor for every other file type. This means that you need
+    # complicated shape-checking and reshaping logic downstream
     # for it to be of any use in an inference context.
-    # The other op is tf.image.decode_png(). In spite of its name, this op
-    # actually handles PNG, JPEG, and non-animated GIF files. For now, we use
-    # this op for simplicity.
-    decoded_image = tf.image.decode_png(raw_image, _NUM_CHANNELS)
-
-    # Downstream code expects a batch of equal-sized images. For now, we
-    # generate a single-image batch.
-    decoded_image_batch = tf.expand_dims(decoded_image, 0,
-                                         name="preprocessed_image")
+    # So we use decode_gif, which in spite of its name, also handles JPEG and
+    # PNG files; and which always returns a batch of images.
+    decoded_image_batch = tf.image.decode_gif(binary_image,
+                                              name="preprocessed_image")
 
   return img_decode_g.as_graph_def()
 

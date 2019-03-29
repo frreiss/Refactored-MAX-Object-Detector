@@ -95,7 +95,8 @@ def main():
     ],
     "values": [
       [
-        base64.standard_b64encode(image_data).decode("utf-8"),
+        # TensorFlow only decodes URL-safe base64
+        base64.urlsafe_b64encode(image_data).decode("utf-8"),
         thresh
       ]
     ]

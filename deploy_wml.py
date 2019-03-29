@@ -265,6 +265,14 @@ def main():
     function_deployment_details)
   print("Function deployment URL: {}".format(function_deployment_endpoint_url))
 
+  print('Lines to add to ibm_cloud_credentials.json:\n'
+        '    "WML_model_ID": "{}",\n'
+        '    "WML_deployment_ID": "{}",\n'
+        '    "WML_function_url": "{}"'
+        ''.format(model_details["metadata"]["guid"],
+                  deployment_details["metadata"]["guid"],
+                  function_deployment_endpoint_url))
+
   print("Done.")
 
 

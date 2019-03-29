@@ -21,10 +21,11 @@ from typing import Dict
 
 import json
 import tensorflow as tf
-
+import numpy as np
 
 # BEGIN MARKER FOR CODE GENERATOR -- DO NOT DELETE
 class InferenceRequest(object):
+
   """
   Class for representing in-flight inference reqeusts as they go through
   preprocessing, inference, and postprocessing.
@@ -126,47 +127,44 @@ class InferenceRequest(object):
     """
     return self._processed_inputs
 
+  @staticmethod
+  def value_to_json(v):
+    """
+    Transform the input value into a Python object will turn back into the
+    original value if it is fed through `json.dumps`, then through
+    `json.loads`, then through `np.array`; that is:
+    ```
+      v == np.array(json.loads(json.dumps(value_to_json(v))))
+    ```
+    """
+    if isinstance(v, np.ndarray):
+      return v.tolist()
+    else:
+      return v
+
   def processed_inputs_as_watson_v3(self):
     # type: () -> Dict[str, Any]
     """
     Convert the `processed_inputs` property of this request to an input
     record in Watson V3 API format, as defined at
     https://watson-ml-api.mybluemix.net.
-    There does not appear to be any formal specification of the input format,
-    only the following example:
-    ```json
-    {
-      "fields": [
-        "name",
-        "age",
-        "position"
-      ],
-      "values": [
-        [
-          "john",
-          33,
-          "engineer"
-        ],
-        [
-          "mike",
-          23,
-          "student"
-        ]
-      ]
-    }
-    ```
-    This method rigorously enforces the implicit requirements of this example:
-    * All fields must be defined in the "fields" tag
-    * The "values" tag must contain a list of tuples
-    * Each tuple under "values" must have the same number of fields as are
-      defined under "fields".
-    Currently we only support a single input tuple.
+    The documentation at the above URL doesn't say anything useful about the
+    format of model inputs. But there is a bit of documentation squirreled
+    away at: https://www.ibm.com/support/knowledgecenter/DSXDOC/analyze-data/
+    ml_dlaas_tensorflow_deploy_score.html
+
+    Following the instructions in that second URL, we generate JSON with a
+    "keyed_values" field containing key-value pairs.
     """
-    field_names = list(self.processed_outputs.keys())
-    first_tuple = [self.processed_outputs[k] for k in field_names]
+    key_value_pairs = [
+      {
+        "key": name,
+        "values": InferenceRequest.value_to_json(self.processed_inputs[name])
+      }
+      for name in self.processed_inputs.keys()
+    ]
     return {
-      "fields": field_names,
-      "values": [first_tuple]
+      "keyed_values": key_value_pairs
     }
 
   @property

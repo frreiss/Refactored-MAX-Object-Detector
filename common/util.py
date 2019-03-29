@@ -115,6 +115,7 @@ ai_parms = {{ "wml_credentials" : wml_credentials,
   
 def deployable_function(parms=ai_parms):
   import json
+  import numpy as np
 {prepost_class_def}
 {inference_request_class_def}
 {handlers_class_def}
