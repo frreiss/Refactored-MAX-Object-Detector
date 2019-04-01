@@ -82,7 +82,7 @@ _WML_META_AUTHOR_NAME = "CODAIT"
 _WML_META_NAME = "MAX Object Detector"
 _WML_META_DESCRIPTION = "Test MAX Models"
 _WML_META_FRAMEWORK_NAME = "tensorflow"
-_WML_META_FRAMEWORK_VERSION = "1.6"
+_WML_META_FRAMEWORK_VERSION = "1.11"
 _WML_META_RUNTIME_NAME = "python"
 _WML_META_RUNTIME_VERSION = "3.6"
 #_WML_META_FRAMEWORK_LIBRARIES = [{'name':'keras', 'version': '2.1.3'}]
@@ -90,80 +90,6 @@ _WML_META_RUNTIME_VERSION = "3.6"
 
 ################################################################################
 # SUBROUTINES
-
-
-def _empty_cos_bucket(cos, bucket_name, location_constraint):
-  # type: (Any, str, str) -> None
-  """
-  Get a COS bucket into a state of being empty. Removes all contents if the
-  bucket has any. Creates the bucket if necessary.
-
-  Args:
-    cos: initialized and connected ibm_boto3 COS client instance
-    bucket_name: Name of the bucket to wipe
-    location_constraint: What "location constraint" code to use when creating
-      the bucket if we need to create the bucket. Ignored if the bucket
-      already exists.
-  """
-  # Step 1: Remove any existing objects in the bucket
-  # Note that the Bucket.objects.all() returns a generator. No REST calls are
-  # made on the following line.
-  files = cos.Bucket(bucket_name).objects.all()
-  try:
-    for file in files:
-      try:
-        cos.Object(bucket_name, file).delete()
-        print("Deleted file {}".format(file))
-      except ClientError as ce:
-        print("CLIENT ERROR while deleting: {}".format(ce))
-  except ClientError as ce:
-    # Assume that this error is "bucket not found" and keep going.
-    print("IGNORING CLIENT ERROR: {}".format(ce))
-    pass
-
-  # Step 2: Create the bucket (noop if bucket already exists)
-  try:
-    cos.Bucket(bucket_name).create(
-      CreateBucketConfiguration={
-        "LocationConstraint": location_constraint
-      }
-    )
-  except ClientError as be:
-    # Flow through only if the call failed because the bucket already exists.
-    if "BucketAlreadyExists" not in str(be):
-      raise be
-
-
-def _cp_to_cos(cos, local_file, bucket_name, item_name, replace=False):
-  """
-  Magic formula for "cp <local_file> <bucket_name>/<item_name>". Roughly
-  equivalent to installing the AWS command line tools, redoing all the work
-  you've done to set up IBM Cloud Service credentials in order get the AWS
-  command line tools configured with working HMAC keys, then running
-  `aws s3 cp <local_file> s3://<server>/<bucket_name>/<item_name>`.
-
-  See https://cloud.ibm.com/docs/services/cloud-object-storage/libraries?
-  topic=cloud-object-storage-using-python#upload-binary-file-preferred-method-
-  for more information.
-
-  Args:
-    cos: initialized and connected ibm_boto3 COS client instance
-    local_file: Single local file to copy to your Cloud Object Storage bucket
-    bucket_name: Name of the target bucket
-    item_name: Path within the bucket at which the object should be copied
-    replace: If True, overwrite any existing object at the target location. If
-      False, raise an exception if the target object already exists.
-  """
-  try:
-    with open(local_file, "rb") as file_data:
-      cos.Object(bucket_name, item_name).upload_fileobj(
-        Fileobj=file_data,
-        Config=_COS_TRANSFER_CONFIG_OBJECT
-      )
-  except ClientError as be:
-    print("CLIENT ERROR: {0}\n".format(be))
-  except Exception as e:
-    print("Unable to complete multi-part upload: {0}".format(e))
 
 
 ################################################################################
@@ -190,10 +116,6 @@ def main():
   print("creds_json is:\n{}".format(creds_json))
 
   _WML_CREDENTIALS = creds_json["WML_credentials"]
-  # _WML_USER_NAME = creds_json["WML_credentials"]["username"]
-  # _WML_PASSWORD = creds_json["WML_credentials"]["password"]
-  # _WML_INSTANCE = creds_json["WML_credentials"]["instance_id"]
-  # _WML_URL = creds_json["WML_credentials"]["url"]
 
   # STEP 2: Convert the SavedModel directory to a tarball. WML expects a
   # tarball.

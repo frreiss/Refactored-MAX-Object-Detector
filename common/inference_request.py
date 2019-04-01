@@ -167,6 +167,34 @@ class InferenceRequest(object):
       "keyed_values": key_value_pairs
     }
 
+  def processed_inputs_as_wml_cli(self, model_id="<model ID goes here>",
+                                  deployment_id="<deployment ID goes here>"):
+    # type: (str, str) -> Dict[str, Any]
+    """
+    Convert the `processed_inputs` property of this request to a format
+    suitable for passing to the CLI command:
+    ```
+    ibmcloud ml score <location of JSON file>
+    ```
+
+    Args:
+      model_id: ID of the Watson Machine Learning model in the Watson Machine
+        Learning model repository. Defaults to a placeholder to allow manual
+        entry after the fact.
+      deployment_id: ID of the deployment of the model that you wish to make
+        a request against. Defaults to a placeholder to allow manual
+        entry after the fact.
+
+    Returns a Python dictionary that can be passed to `json.dumps()` to
+    produce the requisite JSON file to feed to the WML CLI.
+    """
+    # The CLI doesn't accept deployment URLs, but instead expects the embedded
+    return {
+      "modelId": model_id,
+      "deploymentId": deployment_id,
+      "payload": self.processed_inputs_as_watson_v3()
+    }
+
   @property
   def raw_outputs(self):
     # type: () -> Dict[str, Any]
@@ -240,7 +268,7 @@ def pass_to_local_tf(
   results = sess.run(fetch_tensor_names, feed_dict=input_dict)
   for i in range(len(fetch_output_names)):
     output_name = fetch_output_names[i]
-    self.raw_outputs[output_name] = results[i]
+    request.raw_outputs[output_name] = results[i]
 
 
 

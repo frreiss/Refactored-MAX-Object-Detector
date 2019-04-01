@@ -132,6 +132,10 @@ def deployable_function(parms=ai_parms):
     request.set_raw_inputs_from_watson_v3(function_payload)
     h = {handlers_class_name}()
     h.pre_process(request)
+    # Uncomment the following to log the request to the local filesystem in a 
+    # format suitable for the CLI
+    # with open("model_request.json", "w") as f:
+    #   f.write(json.dumps(request.processed_inputs_as_wml_cli(), indent=2))
     request.raw_outputs = client.deployments.score(
       parms["model_deployment_endpoint_url"], 
       request.processed_inputs_as_watson_v3())
