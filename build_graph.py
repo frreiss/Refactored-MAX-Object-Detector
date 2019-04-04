@@ -44,17 +44,17 @@ from __future__ import division
 from __future__ import print_function
 
 import os
-import re
 import tensorflow as tf
 import graph_def_editor as gde
-import numpy as np
 import shutil
-import tarfile
 from typing import List
-import textwrap
-import urllib.request
-
+import tempfile
 from tensorflow.tools import graph_transforms
+import textwrap
+
+# Local imports
+from common import graph_util, util, prepost
+import handlers
 
 FLAGS = tf.flags.FLAGS
 
@@ -63,206 +63,11 @@ def _indent(s):
   return textwrap.indent(str(s), "    ")
 
 
-# Parameters of input graph
-_LONG_MODEL_NAME = "ssd_mobilenet_v1_coco_2018_01_28"
-_MODEL_TARBALL_URL = ("http://download.tensorflow.org/models/object_detection/" 
-                      + _LONG_MODEL_NAME + ".tar.gz")
-# Path to frozen graph within tarball
-_FROZEN_GRAPH_MEMBER = _LONG_MODEL_NAME + "/frozen_inference_graph.pb"
-_INPUT_NODE_NAMES = ["image_tensor"]
-_OUTPUT_NODE_NAMES = ["detection_boxes", "detection_classes",
-                      "detection_scores", "num_detections"]
-
+###############################################################################
+# CONSTANTS
 _HASH_TABLE_INIT_OP_NAME = "hash_table_init"
-
-# Label map for decoding label IDs in the output of the graph
-_LABEL_MAP_URL = ("https://raw.githubusercontent.com/tensorflow/models/"
-                  "f87a58cd96d45de73c9a8330a06b2ab56749a7fa/research/"
-                  "object_detection/data/mscoco_label_map.pbtxt")
-
-
-# Locations of intermediate files
-_TMP_DIR = "./temp"
-_SAVED_MODEL_DIR = _TMP_DIR + "/original_model"
-_FROZEN_GRAPH_FILE = "{}/frozen_graph.pbtext".format(_TMP_DIR)
-_PRE_POST_GRAPH_FILE = "{}/pre_and_post.pbtext".format(_TMP_DIR)
-_TF_REWRITES_GRAPH_FILE = "{}/after_tf_rewrites_graph.pbtext".format(_TMP_DIR)
-_GDE_REWRITES_GRAPH_FILE = "{}/after_gde_rewrites_graph.pbtext".format(_TMP_DIR)
-_AFTER_MODEL_FILES = [
-  _FROZEN_GRAPH_FILE, _TF_REWRITES_GRAPH_FILE, _GDE_REWRITES_GRAPH_FILE
-]
-
-_OUTPUT_SAVED_MODEL_DIR = "./saved_model"
-
-
-def _clear_dir(path: str):
-  if os.path.isdir(path):
-    shutil.rmtree(path)
-  os.mkdir(path)
-
-
-def _protobuf_to_file(pb, path, human_readable_name):
-  with open(path, "w") as f:
-    f.write(str(pb))
-  print("{} written to {}".format(human_readable_name, path))
-
-
-def _fetch_or_use_cached(file_name: str, url: str):
-  """
-  Check for a cached copy of the indicated file in our temp directory.
-
-  If a copy doesn't exist, download the file.
-
-  Arg:
-    file_name: Name of the file within the temp dir, not including the temp
-      dir path
-    url: Full URL from which to download the file, including remote file
-      name, which can be different from file_name
-
-  Returns the path of the cached file.
-  """
-  cached_filename = "{}/{}".format(_TMP_DIR, file_name)
-  if not os.path.exists(cached_filename):
-    print("Downloading {} to {}".format(url, cached_filename))
-    urllib.request.urlretrieve(url, cached_filename)
-  return cached_filename
-
-
-def _get_frozen_graph():
-  """
-  Obtains the starting version of the model from the TensorFlow model zoo
-
-  Returns GraphDef
-  """
-  tarball = _fetch_or_use_cached("{}.tar.gz".format(_LONG_MODEL_NAME),
-                                 _MODEL_TARBALL_URL)
-
-  print("Original model files at {}".format(tarball))
-  with tarfile.open(tarball) as t:
-    frozen_graph_bytes = t.extractfile(_FROZEN_GRAPH_MEMBER).read()
-    return tf.GraphDef.FromString(frozen_graph_bytes)
-
-
-def _build_preprocessing_graph_def():
-  """
-  Build a TensorFlow graph that performs the preprocessing operations that
-  need to happen before the main graph, then convert to a GraphDef.
-
-  Returns:
-    Python object representation of the GraphDef for the preprocessing graph.
-    Input node of the graph is the placeholder "raw_image", and the output is
-    the node with the name "preprocessed_image".
-  """
-  # Preprocessing steps performed:
-  # 1. Decode base64
-  # 2. Uncompress JPEG/PNG/GIF image file
-  # 3. Massage into a single-image batch
-  # 2 and 3 are handled by the same op
-  img_decode_g = tf.Graph()
-  with img_decode_g.as_default():
-    raw_image = tf.placeholder(tf.string, name="raw_image")
-
-    binary_image = tf.io.decode_base64(raw_image)
-
-    # tf.image.decode_image() returns a 4D tensor when it receives a GIF and
-    # a 3D tensor for every other file type. This means that you need
-    # complicated shape-checking and reshaping logic downstream
-    # for it to be of any use in an inference context.
-    # So we use decode_gif, which in spite of its name, also handles JPEG and
-    # PNG files; and which always returns a batch of images.
-    decoded_image_batch = tf.image.decode_gif(binary_image,
-                                              name="preprocessed_image")
-
-  return img_decode_g.as_graph_def()
-
-
-def _build_postprocessing_graph_def():
-  """
-  Build the TensorFlow graph that performs postprocessing operations that
-  should happen after the main graph.
-
-  Returns:
-    Python object representation of the GraphDef for the postprocessing graph.
-    The graph has one input placeholder called "detection_classes" and
-    an output op called "decoded_detection_classes".
-    The graph will also have an op called "hash_table_init" that initializes
-    the mapping table. This op MUST be run exactly once before the
-    "decoded_detection_classes" op will work.
-  """
-  label_file = _fetch_or_use_cached("labels.pbtext", _LABEL_MAP_URL)
-
-  # Category mapping comes in pbtext format. Translate to the format that
-  # TensorFlow's hash table initializers expect (key and value tensors).
-  with open(label_file, "r") as f:
-    raw_data = f.read()
-  # Parse directly instead of going through the protobuf API dance.
-  records = raw_data.split("}")
-  records = records[0:-1]  # Remove empty record at end
-  records = [r.replace("\n", "") for r in records] # Strip newlines
-  regex = re.compile(r"item {  name: \".+\"  id: (.+)  display_name: \"(.+)\"")
-  keys = []
-  values = []
-  for r in records:
-    match = regex.match(r)
-    keys.append(int(match.group(1)))
-    values.append(match.group(2))
-
-  result_decode_g = tf.Graph()
-  with result_decode_g.as_default():
-    # The original graph produces floating-point output for detection class,
-    # even though the output is always an integer.
-    float_class = tf.placeholder(tf.float32, shape=[None],
-                               name="detection_classes")
-    int_class = tf.cast(float_class, tf.int32)
-    key_tensor = tf.constant(keys, dtype=tf.int32)
-    value_tensor = tf.constant(values)
-    table_init = tf.contrib.lookup.KeyValueTensorInitializer(
-      key_tensor,
-      value_tensor,
-      name=_HASH_TABLE_INIT_OP_NAME)
-    hash_table = tf.contrib.lookup.HashTable(
-      table_init,
-      default_value="Unknown"
-    )
-    _ = hash_table.lookup(int_class, name="decoded_detection_classes")
-
-  return result_decode_g.as_graph_def()
-
-
-def _graft_pre_and_post_processing_to_main_graph(g: gde.Graph):
-  """
-  Attach pre- and post-processing subgraphs to the main graph.
-
-  Args:
-    g: GDE representation of the core graph. Modified in place.
-  """
-  # Build the pre- and post-processing subgraphs and import into GDE
-  pre_g = gde.Graph(_build_preprocessing_graph_def())
-  post_g = gde.Graph(_build_postprocessing_graph_def())
-
-  # Replace the graph's input placeholder with the contents of our
-  # pre-processing graph.
-  name_of_input_node = _INPUT_NODE_NAMES[0]
-  gde.copy(pre_g, g)
-  gde.reroute_ts(g.get_node_by_name("preprocessed_image").output(0),
-                 g.get_node_by_name(name_of_input_node).output(0))
-  g.remove_node_by_name(name_of_input_node)
-  g.rename_node("raw_image", name_of_input_node)
-
-  # Tack on the postprocessing graph at the original output and rename
-  # the postprocessed output to the original output's name
-  # The original graph produces an output called "detection_classes".
-  # The postprocessing graph goes from "detection_classes" to
-  # "decoded_detection_classes".
-  # The graph after modification produces decoded classes under the original
-  # "detection_classes" name. The original output is renamed to
-  # "raw_detection_classes".
-  g.rename_node("detection_classes", "raw_detection_classes")
-  gde.copy(post_g, g)
-  gde.reroute_ts(g.get_node_by_name("raw_detection_classes").output(0),
-                 g.get_node_by_name("detection_classes").output(0))
-  g.remove_node_by_name("detection_classes")
-  g.rename_node("decoded_detection_classes", "detection_classes")
+_PYTHON_SAVED_MODEL_DIR = "./saved_model"
+_JS_SAVED_MODEL_DIR = "./saved_model_js"
 
 
 def _apply_graph_transform_tool_rewrites(g: gde.Graph,
@@ -303,45 +108,36 @@ def _apply_graph_transform_tool_rewrites(g: gde.Graph,
   return after_tf_rewrites_graph_def
 
 
-def _graph_has_op(g: tf.Graph, op_name: str):
+def _apply_generic_deployment_rewrites(graph, graph_gen, temp_dir):
+  # type: (gde.Graph, prepost.GraphGen, str) -> gde.Graph
   """
-  A method that really ought to be part of `tf.Graph`. Returns true of the
-  indicated graph has an op by the indicated name.
+  Common code to apply general-purpose graph optimization rewrites that
+  remove unnecessary portions of the graph in preparation for inference.
+
+  Args:
+    graph: `gde.Graph` object containing the graph after adding any pre/post
+      subgraphs
+    graph_gen: Graph generation callbacks object for the current model
+    temp_dir: Location where this method should write out temp files
+
+  Returns the modified graph as a `gde.Graph` object
   """
-  all_ops_in_graph = g.get_operations()
-  names_of_all_ops_in_graph = [o.name for o in all_ops_in_graph]
-  return op_name in names_of_all_ops_in_graph
-
-
-def main(_):
-  # Remove any detritus of previous runs of this script, but leave the temp
-  # dir in place because the user might have a shell there.
-  if not os.path.isdir(_TMP_DIR):
-    os.mkdir(_TMP_DIR)
-  _clear_dir(_SAVED_MODEL_DIR)
-  for f in _AFTER_MODEL_FILES:
-    if os.path.isfile(f):
-      os.remove(f)
-
-  # We start with a frozen graph for the model. "Frozen" means that all
-  # variables have been converted to constants.
-  frozen_graph_def = _get_frozen_graph()
-  _protobuf_to_file(frozen_graph_def, _FROZEN_GRAPH_FILE, "Frozen graph")
-
-  # Graft the preprocessing and postprocessing graphs onto the beginning and
-  # end of the inference graph.
-  g = gde.Graph(frozen_graph_def)
-  _graft_pre_and_post_processing_to_main_graph(g)
-  after_add_pre_post_graph_def = g.to_graph_def()
-  _protobuf_to_file(after_add_pre_post_graph_def, _PRE_POST_GRAPH_FILE,
-                    "Graph with pre- and post-processing")
-
   # Now run through some of TensorFlow's built-in graph rewrites.
+  output_nodes = graph_gen.output_node_names()
+
+  # Need to treat initializer nodes, if present, as output nodes for the
+  # purposes of the Graph Transform Tool
+  if graph.contains_node(_HASH_TABLE_INIT_OP_NAME):
+    output_nodes.append(_HASH_TABLE_INIT_OP_NAME)
+
   after_tf_rewrites_graph_def = _apply_graph_transform_tool_rewrites(
-    g, _INPUT_NODE_NAMES, _OUTPUT_NODE_NAMES + [_HASH_TABLE_INIT_OP_NAME])
-  _protobuf_to_file(after_tf_rewrites_graph_def,
-                    _TF_REWRITES_GRAPH_FILE,
-                    "Graph after built-in TensorFlow rewrites")
+    graph, graph_gen.input_node_names(), output_nodes)
+  util.protobuf_to_file(after_tf_rewrites_graph_def,
+                        temp_dir + "/after_tf_rewrites_graph.pbtext",
+                        "Graph after built-in TensorFlow rewrites")
+
+  print("    Number of ops after built-in rewrites: {}".format(len(
+    after_tf_rewrites_graph_def.node)))
 
   # Now run the GraphDef editor's graph prep rewrites
   g = gde.Graph(after_tf_rewrites_graph_def)
@@ -349,28 +145,62 @@ def main(_):
   gde.rewrite.fold_old_batch_norms(g)
   gde.rewrite.fold_batch_norms_up(g)
   after_gde_graph_def = g.to_graph_def(add_shapes=True)
-  _protobuf_to_file(after_gde_graph_def,
-                    _GDE_REWRITES_GRAPH_FILE,
-                    "Graph after fold_batch_norms_up() rewrite")
+  util.protobuf_to_file(after_gde_graph_def,
+                        temp_dir + "/after_gde_rewrites_graph.pbtext",
+                        "Graph after fold_batch_norms_up() rewrite")
 
-  # Dump some statistics about the number of each type of op
+  print("         Number of ops after GDE rewrites: {}".format(len(
+    after_gde_graph_def.node)))
+  return g
+
+
+def _make_python_deployable_graph(frozen_graph_def, graph_gen,
+                                  temp_dir, saved_model_location):
+  # type: (tf.GraphDef, prepost.GraphGen, str, str) -> None
+  """
+  Prepare a SavedModel directory with a graph that is deployable via the
+  Python or C++ APIs of TensorFlow.
+
+  Args:
+    frozen_graph_def: Base starter graph produced by inference, after turning
+      variables to constants but before other rewrites.
+    graph_gen: Callback object for current model
+    temp_dir: Temporary directory in which to dump intermediate results in
+      case they are needed for debugging.
+    saved_model_location: Location where the final output SavedModel should go
+
+  Returns:
+    A graph that has been optimized and augmented with preprocessing and
+    postprocessing ops.
+  """
+  # Graft the preprocessing and postprocessing graphs onto the beginning and
+  # end of the inference graph.
+  g = gde.Graph(frozen_graph_def)
+
+  preproc_g = gde.Graph(graph_gen.pre_processing_graph())
+  postproc_g = gde.Graph(graph_gen.post_processing_graph())
+
+  graph_util.add_preprocessing(g, preproc_g)
+  graph_util.add_postprocessing(g, postproc_g)
+
+  after_add_pre_post_graph_def = g.to_graph_def()
+  util.protobuf_to_file(after_add_pre_post_graph_def,
+                        temp_dir + "/after_pre_and_post.pbtext",
+                        "Graph with pre- and post-processing")
+
   print("            Number of ops in frozen graph: {}".format(len(
     frozen_graph_def.node)))
   print(" Num. ops after adding pre- and post-proc: {}".format(len(
     after_add_pre_post_graph_def.node)))
-  print("    Number of ops after built-in rewrites: {}".format(len(
-    after_tf_rewrites_graph_def.node)))
-  print("         Number of ops after GDE rewrites: {}".format(len(
-    after_gde_graph_def.node)))
+
+  g = _apply_generic_deployment_rewrites(g, graph_gen, temp_dir)
 
   # Graph preparation complete. Create a SavedModel "file" (actually a
   # directory)
-  if os.path.isdir(_OUTPUT_SAVED_MODEL_DIR):
-    shutil.rmtree(_OUTPUT_SAVED_MODEL_DIR)
   saved_model_graph = tf.Graph()
   with saved_model_graph.as_default():
     with tf.Session() as sess:
-      tf.import_graph_def(after_gde_graph_def, name="")
+      tf.import_graph_def(g.to_graph_def(), name="")
 
       # Recreate the hash table initializers collection, which got wiped out
       # when we round-tripped the graph through the GraphDef format.
@@ -383,18 +213,100 @@ def main(_):
       # tensors out of the graph.
       inputs_dict = {
         n: saved_model_graph.get_tensor_by_name(n + ":0")
-        for n in _INPUT_NODE_NAMES
+        for n in graph_gen.input_node_names()
       }
       outputs_dict = {
         n: saved_model_graph.get_tensor_by_name(n + ":0")
-        for n in _OUTPUT_NODE_NAMES
+        for n in graph_gen.output_node_names()
       }
+      if os.path.isdir(saved_model_location):
+        shutil.rmtree(saved_model_location)
       tf.saved_model.simple_save(sess,
-                                 export_dir=_OUTPUT_SAVED_MODEL_DIR,
+                                 export_dir=saved_model_location,
                                  inputs=inputs_dict,
                                  outputs=outputs_dict,
                                  legacy_init_op=hash_table_init_op)
-  print("SavedModel written to {}".format(_OUTPUT_SAVED_MODEL_DIR))
+  print("SavedModel written to {}".format(saved_model_location))
+
+
+def _make_javascript_deployable_graph(frozen_graph_def, graph_gen,
+                                      temp_dir, saved_model_location):
+  # type: (tf.GraphDef, prepost.GraphGen, str, str) -> None
+  """
+  Prepare a SavedModel directory with a graph that is deployable via
+  TensorFlow.js
+
+  Args:
+    frozen_graph_def: Base starter graph produced by inference, after turning
+      variables to constants but before other rewrites.
+    graph_gen: Callbacks for the current model
+    temp_dir: Temporary directory in which to dump intermediate results in
+      case they are needed for debugging.
+    saved_model_location: Location where the final output SavedModel should go
+
+  Returns:
+    A graph that has been optimized. No preprocessing or postprocessing ops
+    are attached, as the ops we would like to use for those purposes are not
+    currently implemented in TensorFlow.js
+  """
+  g = gde.Graph(frozen_graph_def)
+
+  print("            Number of ops in frozen graph: {}".format(len(
+    frozen_graph_def.node)))
+
+  g = _apply_generic_deployment_rewrites(g, graph_gen, temp_dir)
+
+  # Graph preparation complete. Create a SavedModel "file" (actually a
+  # directory)
+  saved_model_graph = tf.Graph()
+  with saved_model_graph.as_default():
+    with tf.Session() as sess:
+      tf.import_graph_def(g.to_graph_def(), name="")
+
+      # simple_save needs pointers to tensors, so pull input and output
+      # tensors out of the graph.
+      inputs_dict = {
+        n: saved_model_graph.get_tensor_by_name(n + ":0")
+        for n in graph_gen.input_node_names()
+      }
+      outputs_dict = {
+        n: saved_model_graph.get_tensor_by_name(n + ":0")
+        for n in graph_gen.output_node_names()
+      }
+      if os.path.isdir(saved_model_location):
+        shutil.rmtree(saved_model_location)
+      tf.saved_model.simple_save(sess,
+                                 export_dir=saved_model_location,
+                                 inputs=inputs_dict,
+                                 outputs=outputs_dict)
+  print("SavedModel written to {}".format(saved_model_location))
+
+
+def _make_temp_dir():
+  """
+  Wrapper around tempfile so that we can enable/disable deletion of temp
+  directories from a single place
+  """
+  _DELETE_TEMP_DIRS = False
+  if _DELETE_TEMP_DIRS:
+    return tempfile.TemporaryDirectory(prefix=".")
+  else:
+    return tempfile.mkdtemp(prefix=".")
+
+
+def main(_):
+  # We start with a frozen graph for the model. "Frozen" means that all
+  # variables have been converted to constants.
+  graph_generators = handlers.GraphGenerators()
+  frozen_graph_def = graph_generators.frozen_graph()
+
+  util.protobuf_to_file(frozen_graph_def, "frozen_graph.pbtxt",
+                        "Frozen graph")
+
+  _make_python_deployable_graph(frozen_graph_def, graph_generators,
+                                _make_temp_dir(), _PYTHON_SAVED_MODEL_DIR)
+  _make_javascript_deployable_graph(frozen_graph_def, graph_generators,
+                                    _make_temp_dir(), _JS_SAVED_MODEL_DIR)
 
 
 if __name__ == "__main__":

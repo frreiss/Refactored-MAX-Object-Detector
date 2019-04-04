@@ -21,12 +21,27 @@ from typing import Dict
 
 import inspect
 import os
+import shutil
 import textwrap
+import tensorflow as tf
 import urllib.request
 
 # Local imports
 import common.prepost as prepost
 import common.inference_request as inference_request
+
+
+def clear_dir(path: str):
+  if os.path.isdir(path):
+    shutil.rmtree(path)
+  os.mkdir(path)
+
+
+def protobuf_to_file(pb, path, human_readable_name):
+  with open(path, "w") as f:
+    f.write(str(pb))
+  print("{} written to {}".format(human_readable_name, path))
+
 
 def fetch_or_use_cached(temp_dir, file_name, url):
   # type: (str, str, str) -> str
@@ -44,6 +59,8 @@ def fetch_or_use_cached(temp_dir, file_name, url):
 
   Returns the path of the cached file.
   """
+  if not os.path.exists(temp_dir):
+    os.mkdir(temp_dir)
   cached_filename = "{}/{}".format(temp_dir, file_name)
   if not os.path.exists(cached_filename):
     print("Downloading {} to {}".format(url, cached_filename))
@@ -54,6 +71,8 @@ def fetch_or_use_cached(temp_dir, file_name, url):
 _BEGIN_MARKER = "# BEGIN MARKER FOR CODE GENERATOR"
 _END_MARKER = "# END MARKER FOR CODE GENERATOR"
 _INDENT_TO_ADD = "  "
+
+
 def _retrieve_code_snippet(module_ref):
   # type: (Any) -> str
   """

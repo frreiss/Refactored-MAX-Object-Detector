@@ -17,10 +17,158 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from typing import Dict
-
-from common.prepost import PrePost
+from common.prepost import PrePost, GraphGen
 from common.inference_request import InferenceRequest
+from common import util
+
+import re
+import tarfile
+import tensorflow as tf
+
+
+################################################################################
+# CONSTANTS
+_CACHE_DIR = "./cached_files"
+_LONG_MODEL_NAME = "ssd_mobilenet_v1_coco_2018_01_28"
+_MODEL_TARBALL_URL = ("http://download.tensorflow.org/models/object_detection/"
+                      + _LONG_MODEL_NAME + ".tar.gz")
+
+# Label map for decoding label IDs in the output of the graph
+_LABEL_MAP_URL = ("https://raw.githubusercontent.com/tensorflow/models/"
+                  "f87a58cd96d45de73c9a8330a06b2ab56749a7fa/research/"
+                  "object_detection/data/mscoco_label_map.pbtxt")
+_FROZEN_GRAPH_MEMBER = _LONG_MODEL_NAME + "/frozen_inference_graph.pb"
+
+################################################################################
+# CALLBACKS THAT CREATE GRAPHS
+class GraphGenerators(GraphGen):
+
+  def frozen_graph(self):
+    # type: () -> tf.GraphDef
+    """
+    Generates and returns the core TensorFlow graph for the model as a frozen
+    (i.e. all variables converted to constants) GraphDef protocol buffer
+    message.
+    """
+    tarball = util.fetch_or_use_cached(_CACHE_DIR,
+                                       "{}.tar.gz".format(_LONG_MODEL_NAME),
+                                       _MODEL_TARBALL_URL)
+
+    print("Original model files at {}".format(tarball))
+    with tarfile.open(tarball) as t:
+      frozen_graph_bytes = t.extractfile(_FROZEN_GRAPH_MEMBER).read()
+      return tf.GraphDef.FromString(frozen_graph_bytes)
+
+  def input_node_names(self):
+    # type: () -> List[str]
+    """
+    Returns a list of the names of Placeholder ops (AKA nodes) in the graph
+    returned by `frozen_graph` that are required inputs for inference.
+    """
+    return ["image_tensor"]
+
+  def output_node_names(self):
+    """
+    Returns a list of the names of  ops (AKA nodes) in the graph returned by
+    `frozen_graph` that produce output values for inference requests.
+    """
+    return ["detection_boxes", "detection_classes",
+            "detection_scores", "num_detections"]
+
+  def pre_processing_graph(self):
+    # type: () -> tf.Graph
+    """
+    Generates and returns a TensorFlow graph containing preprocessing
+    operations. By convention, this graph contains one or more input
+    placeholders that correspond to input placeholders by the same name in
+    the main graph.
+
+    For each placeholder in the original graph that needs preprocessing,
+    the preprocessing graph should contain a placeholder with the same name
+    and a second op named "<name of placeholder>_preprocessed", where `<name
+    of placeholder>` is the name of the Placeholder op.
+    """
+    # Preprocessing steps performed:
+    # 1. Decode base64
+    # 2. Uncompress JPEG/PNG/GIF image file
+    # 3. Massage into a single-image batch
+    # 2 and 3 are handled by the same op
+    img_decode_g = tf.Graph()
+    with img_decode_g.as_default():
+      raw_image = tf.placeholder(tf.string, name="image_tensor")
+
+      binary_image = tf.io.decode_base64(raw_image)
+
+      # tf.image.decode_image() returns a 4D tensor when it receives a GIF and
+      # a 3D tensor for every other file type. This means that you need
+      # complicated shape-checking and reshaping logic downstream
+      # for it to be of any use in an inference context.
+      # So we use decode_gif, which in spite of its name, also handles JPEG and
+      # PNG files; and which always returns a batch of images.
+      decoded_image_batch = tf.image.decode_gif(
+        binary_image, name="image_tensor_preprocessed")
+    return img_decode_g
+
+  def post_processing_graph(self):
+    # type: () -> tf.Graph
+    """
+    Generates and returns a TensorFlow graph containing postprocessing
+    operations. By convention, this graph contains one or more input
+    placeholders that correspond to output ops by the same name in
+    the main graph.
+
+    For each output in the original graph that needs postprocessing,
+    the preprocessing graph should contain an input placeholder with the same
+    name and a second op named "<name of output>_postprocessed",
+    where `<name of output>` is the name of the original output op.
+    """
+
+
+
+    _HASH_TABLE_INIT_OP_NAME = "hash_table_init"
+
+    label_file = util.fetch_or_use_cached(_CACHE_DIR, "labels.pbtext",
+                                          _LABEL_MAP_URL)
+
+    # Category mapping comes in pbtext format. Translate to the format that
+    # TensorFlow's hash table initializers expect (key and value tensors).
+    with open(label_file, "r") as f:
+      raw_data = f.read()
+    # Parse directly instead of going through the protobuf API dance.
+    records = raw_data.split("}")
+    records = records[0:-1]  # Remove empty record at end
+    records = [r.replace("\n", "") for r in records] # Strip newlines
+    regex = re.compile(r"item {  name: \".+\"  id: (.+)  display_name: \"(.+)\"")
+    keys = []
+    values = []
+    for r in records:
+      match = regex.match(r)
+      keys.append(int(match.group(1)))
+      values.append(match.group(2))
+
+    result_decode_g = tf.Graph()
+    with result_decode_g.as_default():
+      # The original graph produces floating-point output for detection class,
+      # even though the output is always an integer.
+      float_class = tf.placeholder(tf.float32, shape=[None],
+                                   name="detection_classes")
+      int_class = tf.cast(float_class, tf.int32)
+      key_tensor = tf.constant(keys, dtype=tf.int32)
+      value_tensor = tf.constant(values)
+      table_init = tf.contrib.lookup.KeyValueTensorInitializer(
+        key_tensor,
+        value_tensor,
+        name=_HASH_TABLE_INIT_OP_NAME)
+      hash_table = tf.contrib.lookup.HashTable(
+        table_init,
+        default_value="Unknown"
+      )
+      _ = hash_table.lookup(int_class, name="detection_classes_postprocessed")
+    return result_decode_g
+
+
+################################################################################
+# CALLBACKS FOR PRE/POST-PROCESSING
 
 
 # BEGIN MARKER FOR CODE GENERATOR -- DO NOT DELETE

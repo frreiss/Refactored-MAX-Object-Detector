@@ -17,7 +17,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from typing import Dict
+import tensorflow as tf
 
 # BEGIN MARKER FOR CODE GENERATOR -- DO NOT REMOVE
 class PrePost(object):
@@ -65,3 +65,64 @@ class PrePost(object):
     """
     raise NotImplementedError()
 # END MARKER FOR CODE GENERATOR -- DO NOT REMOVE
+
+
+class GraphGen(object):
+  """
+  Base class for graph generation callbacks in Python.
+  """
+
+  def frozen_graph(self):
+    # type: () -> tf.GraphDef
+    """
+    Generates and returns the core TensorFlow graph for the model as a frozen
+    (i.e. all variables converted to constants) GraphDef protocol buffer
+    message.
+    """
+    raise NotImplementedError()
+
+  def input_node_names(self):
+    # type: () -> List[str]
+    """
+    Returns a list of the names of Placeholder ops (AKA nodes) in the graph
+    returned by `frozen_graph` that are required inputs for inference.
+    """
+    raise NotImplementedError()
+
+  def output_node_names(self):
+    """
+    Returns a list of the names of  ops (AKA nodes) in the graph returned by
+    `frozen_graph` that produce output values for inference requests.
+    """
+    raise NotImplementedError()
+
+  def pre_processing_graph(self):
+    # type: () -> tf.Graph
+    """
+    Generates and returns a TensorFlow graph containing preprocessing
+    operations. By convention, this graph contains one or more input
+    placeholders that correspond to input placeholders by the same name in
+    the main graph.
+
+    For each placeholder in the original graph that needs preprocessing,
+    the preprocessing graph should contain a placeholder with the same name
+    and a second op named "<name of placeholder>_preprocessed", where `<name
+    of placeholder>` is the name of the Placeholder op.
+    """
+    raise NotImplementedError()
+
+  def post_processing_graph(self):
+    # type: () -> tf.Graph
+    """
+    Generates and returns a TensorFlow graph containing postprocessing
+    operations. By convention, this graph contains one or more input
+    placeholders that correspond to output ops by the same name in
+    the main graph.
+
+    For each output in the original graph that needs postprocessing,
+    the preprocessing graph should contain an input placeholder with the same
+    name and a second op named "<name of output>_postprocessed",
+    where `<name of output>` is the name of the original output op.
+    """
+    raise NotImplementedError()
+
