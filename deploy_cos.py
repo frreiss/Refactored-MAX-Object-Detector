@@ -204,12 +204,6 @@ def main():
   _COS_RESOURCE_CRN = creds_json["COS_credentials"]["resource_instance_id"]
   _COS_LOCATION_CONSTRAINT = creds_json["COS_location_constraint"]
 
-  _WML_CREDENTIALS = creds_json["WML_credentials"]
-  _WML_USER_NAME = creds_json["WML_credentials"]["username"]
-  _WML_PASSWORD = creds_json["WML_credentials"]["password"]
-  _WML_INSTANCE = creds_json["WML_credentials"]["instance_id"]
-  _WML_URL = creds_json["WML_credentials"]["url"]
-
   # STEP 2: Create a bucket on Cloud Object Storage to hold the SavedModel
   cos = ibm_boto3.resource("s3",
                            ibm_api_key_id=_COS_API_KEY_ID,
