@@ -258,7 +258,7 @@ def pass_to_local_tf(
   input_dict = {}
   for key in signature.inputs:
     tensor_name = signature.inputs[key].name
-    input_dict[tensor_name] = self.processed_inputs[key]
+    input_dict[tensor_name] = request.processed_inputs[key]
   fetch_tensor_names = []
   fetch_output_names = []
   for key in signature.outputs:

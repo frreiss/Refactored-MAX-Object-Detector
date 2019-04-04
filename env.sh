@@ -42,7 +42,7 @@ rm -rf ./graph_def_editor
 conda create -y --prefix ./env \
     python=${PYTHON_VERSION} \
     numpy \
-    tensorflow \
+    tensorflow==1.11 \
     jupyterlab \
     pytest \
     keras \

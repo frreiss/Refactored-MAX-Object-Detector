@@ -25,6 +25,7 @@ import common.inference_request as inference_request
 import handlers
 
 # System imports
+import base64
 import os
 import tensorflow as tf
 
@@ -55,14 +56,15 @@ def main():
   thresh = 0.7
 
   request = inference_request.InferenceRequest()
-  request.raw_inputs["image"] = image_data
+  request.raw_inputs["image"] = base64.urlsafe_b64encode(
+          image_data).decode("utf-8")
   request.raw_inputs["threshold"] = thresh
 
   # Fire up TensorFlow and perform end-to-end inference
   with tf.Session() as sess:
     graph = tf.Graph()
     with graph.as_default():
-      meta_graph = tf.saved_model.load(
+      meta_graph = tf.saved_model.loader.load(
         sess,
         [tf.saved_model.tag_constants.SERVING],
         _SAVED_MODEL_DIR)  # type: tf.MetaGraphDef
