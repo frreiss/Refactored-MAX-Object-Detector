@@ -38,7 +38,7 @@ Commands to copy and paste:
 conda activate ./env
 ```
 
-### Part 1: Generate the Graph
+### Part 1: Generate the graph
 
 Since the core model is implemented in TensorFlow, the graph is represented as a SavedModel "file". The script that generates this file is at `build_graph.py`, and its output goes to `outputs/saved_model`.
 
@@ -47,8 +47,65 @@ Commands to copy and paste:
 env/bin/python ./build_graph.py
 ```
 
+The resulting graph goes to a TensorFlow SavedModel located at `[project root]/saved_model`.
 
-### Part 2: Generate the Deployment Artifact
+### Part 2: Test the graph locally
 
-**TODO steps for various output targets**
+The script `test_local.py` instantiates the model graph locally, sends an example image through the graph, and prints the result. Commands to copy and paste:
+```
+env/bin/python ./test_local.py
+```
+The output should look something like this:
+```
+[...]
+Predictions: [{'label': 'bear', 'probability': 0.991337776184082, 'detection_box': [0.27232617139816284, 0.24801963567733765, 0.8350169062614441, 0.7980572581291199]}]
+Result:
+{
+    "status": "ok",
+    "predictions": [
+        {
+            "label": "bear",
+            "probability": 0.991337776184082,
+            "detection_box": [
+                0.27232617139816284,
+                0.24801963567733765,
+                0.8350169062614441,
+                0.7980572581291199
+            ]
+        }
+    ]
+}
+```
+
+### Part 3: Deploy the model to Watson Machine Learning
+
+Start by performing the following manual steps:
+  * Create a file `ibm_cloud_credentials.json` in this directory, if such a
+    file doesn't already exist.
+    Initialize the file with an empty JSON record, i.e. "{ }".
+  * Create a Watson Machine Learning (WML) instance.
+  * Navigate to your WML instance's web UI and click on the "Service
+    credentials" link, then click on "New credential" to create a new set of
+    service credentials. Copy the credentials into `ibm_cloud_credentials.json`
+    under the key "WML_credentials".
+    
+If you are running on a shared machine, make sure that other user IDs cannot read `ibm_cloud_credentials.json`. **DO NOT CHECK CREDENTIALS INTO GITHUB.**
+
+Then run the script `deploy_wml.py`:
+```
+env/bin/python deploy_wml.py
+```
+When the script finishes, it prints out three additional lines to add to `ibm_cloud_credentials.json`; something like:
+```
+[...]
+Lines to add to ibm_cloud_credentials.json:
+    "WML_model_ID": "[long hexadecimal string]",
+    "WML_deployment_ID": "[long hexadecimal string]",
+    "WML_function_url": "https://us-south.ml.cloud.ibm.com/v3/wml_instances/[long hexadecimal string]/deployments/[long hexadecimal string]/online"
+```
+Add those lines of JSON to `ibm_cloud_credentials.json`, replacing any previous values of those lines.
+
+
+
+**TODO steps for additional output targets**
 
