@@ -105,7 +105,28 @@ Lines to add to ibm_cloud_credentials.json:
 ```
 Add those lines of JSON to `ibm_cloud_credentials.json`, replacing any previous values of those lines.
 
+### Part 4: Test the deployed model on Watson Machine Learning with pre- and post-processing code running locally
 
+The script `test_wml_local.py` does the following steps:
+1. Read in an example image
+2. Run preprocessing code for scoring on WML locally on your laptop
+3. Submit the preprocessed inference request to the deployed model on WML
+4. Run some postprocessing code to reformat the response
+5. Print the response
+
+To run the script, use the following command:
+```
+env/bin/python test_wml_local.py
+```
+*This script is not currently working, but it should be working soon*
+
+### Part 5: Test the deployed model on Watson Machine Learning with pre- and post-processing code running on Watson Machine Learning
+
+The script `test_wml.py` uses a the WML function deployed earlier by `deploy_wml.py` to perform pre- and post-processing operations. The script issues a REST request against the deployed function and prints out the response. To run the script, use the following command:
+```
+env/bin/python test_wml.py
+```
+*This script is not currently working, but it should be working soon*
 
 **TODO steps for additional output targets**
 
