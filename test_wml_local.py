@@ -114,10 +114,10 @@ def main():
   }
   with open("request.json", "w") as f:
     f.write(json.dumps(cli_json, indent=2))
-  print("A copy of the request we're about to send has been saved to "
+  print("A copy of the request we're about emulate locally has been saved to "
         "./request.json.  Run\n"
         "   bx ml score request.json\n"
-        "to perform the REST call manually from the CLI.")
+        "to use the WML CLI to run the end-to-end request remotely.")
 
   func_ptr = deployable_function.deployable_function()
   response = func_ptr(request_json)
