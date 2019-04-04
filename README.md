@@ -23,7 +23,7 @@ Prototype of new structure for the existing project
 **TODO: Describe directory structure once it settles down**
 
 
-## Compiling the model
+## Generating and deploying the model
 
 Model compilation happens in two phases: First, generate a graph suitable for inference; then wrap the graph in an appropriate container for the target deployment environment.
 
