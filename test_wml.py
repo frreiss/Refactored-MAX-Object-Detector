@@ -69,10 +69,22 @@ def main():
 
   # Note that "values" tag at the top level. This tag is a requirement of the
   # WML API standard.
-  request_json = {"values": {
-    "image": base64.standard_b64encode(image_data).decode("utf-8"),
-    "threshold": thresh
-  }}
+  # Under the "values" tag, you must place a list of tuples. Each tuple must
+  # be represented as a JSON list of values. Tensor-valued values must be
+  # represented as lists of numbers.
+  request_json = {
+    "fields": [
+      "image",
+      "threshold"
+    ],
+    "values": [
+      [
+        # TensorFlow only decodes URL-safe base64
+        base64.urlsafe_b64encode(image_data).decode("utf-8"),
+        thresh
+      ]
+    ]
+  }
 
   # Connect to Watson Machine Learning Python API
   with open("./ibm_cloud_credentials.json") as f:
