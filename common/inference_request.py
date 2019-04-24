@@ -116,6 +116,44 @@ class InferenceRequest(object):
       field_value = first_tuple[i]
       self.raw_inputs[field_name] = field_value
 
+  def set_raw_outputs_from_watson_v3(self, response_json):
+    # type: (Dict[str, Any]) -> None
+    """
+    Set the `raw_outputs` property of this request using a JSON response in
+    Watson V3 API format, as defined at https://watson-ml-api.mybluemix.net.
+    There does not appear to be any formal specification of the output format.
+
+    Args:
+      response_json: JSON response in Watson V3 format.
+    """
+    # As of April 23, 2019, the structure of a WML TensorFlow model response is:
+    # {
+    #   "keyed_values" : [
+    #     {
+    #       "key" : "<name of first model output tensor>",
+    #       "values" : <value of output 1 as a nested JSON array of strings and
+    #                   numbers>
+    #     },
+    #     ...
+    #     {
+    #       "key" : "<name of kth model output tensor>",
+    #       "values" : <value of output k>
+    #     }
+    #   ]
+    # }
+    if "keyed_values" not in response_json:
+      raise ValueError("Response from Watson Machine Learning not in expected "
+                       "format. Response was: '{}'".format(response_json))
+    key_value_list = response_json["keyed_values"]
+    for pair_as_dict in key_value_list:
+      key = pair_as_dict["key"]
+      values = pair_as_dict["values"]
+
+      # The values that WML returns appear to be in a format that is always
+      # compatible with numpy.array(), so use that function as a shortcut for
+      # decoding.
+      self.raw_outputs[key] = np.array(values)
+
   @property
   def processed_inputs(self):
     # type: () -> Dict[str, Any]

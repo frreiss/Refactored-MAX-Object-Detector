@@ -155,9 +155,10 @@ def deployable_function(parms=ai_parms):
     # format suitable for the CLI
     # with open("model_request.json", "w") as f:
     #   f.write(json.dumps(request.processed_inputs_as_wml_cli(), indent=2))
-    request.raw_outputs = client.deployments.score(
-      parms["model_deployment_endpoint_url"], 
-      request.processed_inputs_as_watson_v3())
+    request.set_raw_outputs_from_watson_v3(
+      client.deployments.score(
+        parms["model_deployment_endpoint_url"], 
+        request.processed_inputs_as_watson_v3()))
     h.post_process(request)
     return request.processed_outputs
     

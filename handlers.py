@@ -239,8 +239,11 @@ class ObjectDetectorHandlers(PrePost):
     for i in range(num_detections):
       probability = float(scores[0, i])
       if probability > request.raw_inputs["threshold"]:
+        classes_value = classes[0, i]
+        if isinstance(classes_value, bytes):
+          classes_value = classes_value.decode("utf-8")
         predictions.append({
-          "label": classes[0, i].decode("utf-8"),
+          "label": classes_value,
           "probability": probability,
           "detection_box": boxes[0, i].tolist()
         })
