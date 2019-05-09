@@ -50,6 +50,10 @@ conda create -y --prefix ./env \
     nomkl
 conda activate ./env
 
+
+# Install tensorflowjs
+pip install tensorflowjs==0.8.5
+
 # Install the latest master branch of GDE
 git clone https://github.com/CODAIT/graph_def_editor.git
 # Temporary: Use my branch until my latest PR is merged 
