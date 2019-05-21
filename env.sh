@@ -52,7 +52,7 @@ conda activate ./env
 
 
 # Install tensorflowjs
-pip install tensorflowjs==0.8.5
+pip install --no-deps tensorflowjs==0.8.5
 
 # Install the latest master branch of GDE
 git clone https://github.com/CODAIT/graph_def_editor.git
@@ -67,6 +67,7 @@ pip install ./graph_def_editor/
 pip install ibm-cos-sdk
 pip install watson-machine-learning-client
 # conda install -c conda-forge awscli
+
 
 conda deactivate
 
