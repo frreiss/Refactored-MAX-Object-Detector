@@ -31,22 +31,17 @@ class ObjectDetectorHandler extends PrePost {
     preprocess(request) {
     
         request.processedInputs['image'] = request.rawInputs['image'].map(element => {
-            let base64Encoded = Buffer.from(element).toString('base64');
             const img = new Image();
             /** 
              * Note: Setting image src via data url, to avoid waiting for image to load
              *  See https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Using_images#Embedding_an_image_via_data_URL
              */
-            img.src = `data:image/jpeg;base64,${base64Encoded}`;
+            img.src = `data:image/jpeg;base64,${element}`;
             const canvas = createCanvas(img.width, img.height);
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0);
             const inputTensor = tf.browser.fromPixels(canvas);
             return inputTensor;
-            // let base64Encoded = Buffer.from(element).toString('base64');
-            // let imgBinary = new Buffer(base64Encoded, 'base64');
-            // console.log(imgBinary)
-            // return imgBinary;
         });
     }
 

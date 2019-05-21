@@ -33,7 +33,7 @@ async function main() {
         .then(function(response) {
             return response.arrayBuffer();
         }).then(function(buffer) {
-             request.rawInputs['image'] = [new Uint8ClampedArray(buffer)];
+             request.rawInputs['image'] = [Buffer.from(buffer).toString('base64')];
              request.rawInputs['threshold'] = 0.7;
              try {
                 handler.preprocess(request);
