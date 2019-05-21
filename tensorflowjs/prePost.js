@@ -26,6 +26,7 @@ class ObjectDetectorHandler extends PrePost {
         super();
         // Labels generated with script using text from https://github.com/tensorflow/models/blob/master/research/object_detection/data/mscoco_label_map.pbtxt
         this.categories = JSON.parse(fs.readFileSync("test/labels.json"));
+        this.canvas = createCanvas(0, 0)
     }
 
     preprocess(request) {
@@ -37,10 +38,11 @@ class ObjectDetectorHandler extends PrePost {
              *  See https://developer.mozilla.org/en-US/docs/Web/API/Canvas_API/Tutorial/Using_images#Embedding_an_image_via_data_URL
              */
             img.src = `data:image/jpeg;base64,${element}`;
-            const canvas = createCanvas(img.width, img.height);
-            const ctx = canvas.getContext('2d');
+            this.canvas.width = img.width;
+            this.canvas.height = img.height;
+            const ctx = this.canvas.getContext('2d');
             ctx.drawImage(img, 0, 0);
-            const inputTensor = tf.browser.fromPixels(canvas);
+            const inputTensor = tf.browser.fromPixels(this.canvas);
             return inputTensor;
         });
     }
