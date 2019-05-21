@@ -22,6 +22,12 @@ class PrePost {
 
 class ObjectDetectorHandler extends PrePost {
 
+    constructor() {
+        super();
+        // Labels generated with script using text from https://github.com/tensorflow/models/blob/master/research/object_detection/data/mscoco_label_map.pbtxt
+        this.categories = JSON.parse(fs.readFileSync("test/labels.json"));
+    }
+
     preprocess(request) {
     
         request.processedInputs['image'] = request.rawInputs['image'].map(element => {
@@ -45,8 +51,6 @@ class ObjectDetectorHandler extends PrePost {
     }
 
     postprocess(request) {
-        let categories = JSON.parse(fs.readFileSync("test/labels.json"));
-        // console.log(categories)
 
         const threshold = request.rawInputs['threshold'];
         let predictions = [];
@@ -60,7 +64,7 @@ class ObjectDetectorHandler extends PrePost {
             if (probability >= threshold) {
                 let classesValue = detectionClasses[0, i];
                 predictions.push({
-                    label: categories[classesValue].class,
+                    label: this.categories[classesValue].class,
                     probability: probability,
                     detectionBox: detectionBoxes[0, i]
                 })
