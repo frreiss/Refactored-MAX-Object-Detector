@@ -53,6 +53,7 @@ conda activate ./env
 
 # Install tensorflowjs
 pip install --no-deps tensorflowjs==0.8.5
+pip install tensorflow-hub==0.1.1
 
 # Install the latest master branch of GDE
 git clone https://github.com/CODAIT/graph_def_editor.git
