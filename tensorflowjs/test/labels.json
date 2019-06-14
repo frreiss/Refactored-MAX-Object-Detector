@@ -1,0 +1,163 @@
+{
+    "1" :
+       {"class":  "person" },
+    "2" :
+       {"class":  "bicycle" },
+    "3" :
+       {"class":  "car" },
+    "4" :
+       {"class":  "motorcycle" },
+    "5" :
+       {"class":  "airplane" },
+    "6" :
+       {"class":  "bus" },
+    "7" :
+       {"class":  "train" },
+    "8" :
+       {"class":  "truck" },
+    "9" :
+       {"class":  "boat" },
+    "10" :
+       {"class":  "traffic light" },
+    "11" :
+       {"class":  "fire hydrant" },
+    "13" :
+       {"class":  "stop sign" },
+    "14" :
+       {"class":  "parking meter" },
+    "15" :
+       {"class":  "bench" },
+    "16" :
+       {"class":  "bird" },
+    "17" :
+       {"class":  "cat" },
+    "18" :
+       {"class":  "dog" },
+    "19" :
+       {"class":  "horse" },
+    "20" :
+       {"class":  "sheep" },
+    "21" :
+       {"class":  "cow" },
+    "22" :
+       {"class":  "elephant" },
+    "23" :
+       {"class":  "bear" },
+    "24" :
+       {"class":  "zebra" },
+    "25" :
+       {"class":  "giraffe" },
+    "27" :
+       {"class":  "backpack" },
+    "28" :
+       {"class":  "umbrella" },
+    "31" :
+       {"class":  "handbag" },
+    "32" :
+       {"class":  "tie" },
+    "33" :
+       {"class":  "suitcase" },
+    "34" :
+       {"class":  "frisbee" },
+    "35" :
+       {"class":  "skis" },
+    "36" :
+       {"class":  "snowboard" },
+    "37" :
+       {"class":  "sports ball" },
+    "38" :
+       {"class":  "kite" },
+    "39" :
+       {"class":  "baseball bat" },
+    "40" :
+       {"class":  "baseball glove" },
+    "41" :
+       {"class":  "skateboard" },
+    "42" :
+       {"class":  "surfboard" },
+    "43" :
+       {"class":  "tennis racket" },
+    "44" :
+       {"class":  "bottle" },
+    "46" :
+       {"class":  "wine glass" },
+    "47" :
+       {"class":  "cup" },
+    "48" :
+       {"class":  "fork" },
+    "49" :
+       {"class":  "knife" },
+    "50" :
+       {"class":  "spoon" },
+    "51" :
+       {"class":  "bowl" },
+    "52" :
+       {"class":  "banana" },
+    "53" :
+       {"class":  "apple" },
+    "54" :
+       {"class":  "sandwich" },
+    "55" :
+       {"class":  "orange" },
+    "56" :
+       {"class":  "broccoli" },
+    "57" :
+       {"class":  "carrot" },
+    "58" :
+       {"class":  "hot dog" },
+    "59" :
+       {"class":  "pizza" },
+    "60" :
+       {"class":  "donut" },
+    "61" :
+       {"class":  "cake" },
+    "62" :
+       {"class":  "chair" },
+    "63" :
+       {"class":  "couch" },
+    "64" :
+       {"class":  "potted plant" },
+    "65" :
+       {"class":  "bed" },
+    "67" :
+       {"class":  "dining table" },
+    "70" :
+       {"class":  "toilet" },
+    "72" :
+       {"class":  "tv" },
+    "73" :
+       {"class":  "laptop" },
+    "74" :
+       {"class":  "mouse" },
+    "75" :
+       {"class":  "remote" },
+    "76" :
+       {"class":  "keyboard" },
+    "77" :
+       {"class":  "cell phone" },
+    "78" :
+       {"class":  "microwave" },
+    "79" :
+       {"class":  "oven" },
+    "80" :
+       {"class":  "toaster" },
+    "81" :
+       {"class":  "sink" },
+    "82" :
+       {"class":  "refrigerator" },
+    "84" :
+       {"class":  "book" },
+    "85" :
+       {"class":  "clock" },
+    "86" :
+       {"class":  "vase" },
+    "87" :
+       {"class":  "scissors" },
+    "88" :
+       {"class":  "teddy bear" },
+    "89" :
+       {"class":  "hair drier" },
+    "90" :
+       {"class":  "toothbrush" }
+ }
+ 

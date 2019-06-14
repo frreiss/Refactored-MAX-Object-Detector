@@ -2,6 +2,8 @@
 env
 graph_def_editor
 saved_model
+saved_model_js
+web_model
 temp
 
 # Vim temp files
@@ -10,6 +12,9 @@ temp
 # IntelliJ metadata
 .idea
 *.iml
+
+# VSCode metadata
+.vscode
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -115,3 +120,6 @@ venv.bak/
 
 # mypy
 .mypy_cache/
+
+# npm installed modules
+node_modules/

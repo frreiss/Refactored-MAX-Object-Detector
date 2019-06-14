@@ -42,13 +42,18 @@ rm -rf ./graph_def_editor
 conda create -y --prefix ./env \
     python=${PYTHON_VERSION} \
     numpy \
-    tensorflow==1.11 \
+    tensorflow==1.13.1 \
     jupyterlab \
     pytest \
     keras \
     pillow \
     nomkl
 conda activate ./env
+
+
+# Install tensorflowjs
+pip install --no-deps tensorflowjs==0.8.5
+pip install tensorflow-hub==0.1.1
 
 # Install the latest master branch of GDE
 git clone https://github.com/CODAIT/graph_def_editor.git
@@ -63,6 +68,7 @@ pip install ./graph_def_editor/
 pip install ibm-cos-sdk
 pip install watson-machine-learning-client
 # conda install -c conda-forge awscli
+
 
 conda deactivate
 

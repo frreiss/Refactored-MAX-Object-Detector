@@ -128,5 +128,27 @@ env/bin/python test_wml.py
 ```
 *This script is not currently working, but it should be working soon*
 
+## Tensorflow JS
+
+### Part 1: Convert the serialized model into a TensorflowJS serialized model
+
+```
+cd tensorflow js
+python convert.py
+```
+
+### Part 2: Install dependencies
+
+```
+npm install
+```
+
+### Part 3: Test TFJS model
+
+```
+node test/js/testLocal.js
+```
+
+
 **TODO steps for additional output targets**
 
